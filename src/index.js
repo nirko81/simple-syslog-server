@@ -33,6 +33,7 @@ const debug = require('debug')('simple-syslog-server') ;
 const util = require('util') ;
 const ConnectionState = require('./ConnectionState') ;
 const parser = require('./parser') ;
+const cef = require('cef_to_json');
 const validate = require('./validate') ;
 
 const SERVICE = {
@@ -109,6 +110,7 @@ Transport.prototype.listen = function(options) {
  * @classdesc An instance of a UDP Syslog Server
  * @param {object} options Options to pass to the UDP Syslog Server
  * @param {string} options.type The UDP transport type ('udp4' or 'udp6')
+ * @param {string} options.protocol The transport protocol type ('syslog' or 'cef')
  * @return {UDP}
  * @constructor
  */
@@ -116,7 +118,7 @@ function UDP(options) {
 	if (!(this instanceof UDP))
 		return new UDP(options) ;
 
-	this.opt = options || { type: 'udp4' } ;
+	this.opt = options || { type: 'udp4', protocol: 'syslog' } ;
 
 	this.server = dgram.createSocket(this.opt) ;
 }
@@ -161,11 +163,18 @@ UDP.prototype.listen = function(options) {
 		})
 		.on('message', (msg, rinfo) => {
 			try {
-				let info = parser(msg, rinfo) ;
-				if(validate(info))
+				if (this.opt.protocol == 'syslog'){
+					let info = parser(msg, rinfo) ;
+					if(validate(info))
+						server.emit('msg', info) ;
+					else
+						server.emit('invalid', info) ;
+				}
+				else {
+					const info = cef.toJson(msg + '') ;
 					server.emit('msg', info) ;
-				else
-					server.emit('invalid', info) ;
+				}
+
 			}
 			catch (err) {
 				server.emit('invalid', err) ;
